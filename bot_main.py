@@ -4,17 +4,37 @@ import uuid
 import telebot
 
 BOT_TOKEN    = ""; # telegram bot token(given by botFather)
-BOT_INTERVAL =  1; # long-pooling check packet interval
-BOT_TIMEOUT  = 10; # long-pooling connection timeout
 BOT_WELCOME  = ""; # user will see this message first
 BOT_NAME     = ""; # (optional) name for the bot
 
 class question(object):
     opts_limit = 4;
-    def __init__(self,question_string):
+    def __init__(self,question_string,input_type):
         self.question = str(question_string);
         self.question_id = uuid.uuid4().hex;
         self.options = list();
+        self.form_controls = {
+            'IB':self.form_question_simplbuttons,
+            'IT':self.form_question_text_field,
+            'IC':self.form_question_checksbox
+        }[input_type];
+    @static_method
+    def generate_questions(filepath):
+        questions = list();
+        with open(filepath,'r') as qs_file:
+            lines = qs_file.readlines();
+            question_index = 0;
+            for line in lines:
+                line = line.split(':');
+                if len(line) == 1:
+                    questions[-1]['input_type'] = line[1];
+                else:
+                    if line[0] == 'Q':
+                        questions.append({'qs':line[1],'opts':[],'input_type':''});
+                        question_index+=1;
+                    elif line[0] == 'O':
+                        questions[-1]['opts'].append(line[1]);
+        return questions;
     def add_option(self,option):
         if len(self.options) < opts_limit:
             self.options.append(option);
@@ -38,100 +58,125 @@ class question(object):
 
     def form_question_checksbox(self,markup):
         pass;
-    def form_question(self,qs_type):
-        # HERE ONE FROM ABOVE HANDLERS SELECTED
+    def form_question_text_field(self,markup):
+        pass;
 
-def telebot_decorators():
+def telebot_decorators(bot,QUESTIONS):
     @bot.message_handler(commands=["start"])
     def send_welcome(message):
         # do something with user_id
         user_id = message.from_user.id;
         markup = telebot.types.InlineKeyboardMarkup();
         bot.send_message(message.chat.id,BOT_WELCOME,reply_markup=markup);
-
-
-
-
-
-
-
-def bot_actions(bot):
-
+        button_to_begin = telebot.types.InlineKeyboardButton('НАЧАТЬ', callback_data=str('0'));
+        markup.add();
     @bot.callback_query_handler(func=lambda call: True)
     def handle(call):
         try:
             callback_data = str(call.data).split('_');
             user_id = call.message.chat.id;
+
+
             qs_index = int(callback_data[0]);
             if int(qs_index) >= 0:
                 USR_STATUS[user_id].update({qs_index:callback_data[1]});
             qs_index+=1;
+
             markup = telebot.types.InlineKeyboardMarkup();
-            if qs_index >= len(QUESTIONS):
-                counter = [0 for i in range(len(QUESTIONS)+1)];
-                print(str(user_id),":",str(USR_STATUS[user_id]))
-                for index in USR_STATUS[user_id].values():
-                    counter[int(index)-1] += 1;
-                #del USR_STATUS[user_id];
-                counter_max = max(counter);
-                mini_counter = 0; max_srore = [];
-                for elem_idx in range(len(counter)):
-                    if counter[elem_idx] == counter_max:
-                        mini_counter+=1;
-                        max_srore.append(elem_idx+1);
-                if (mini_counter == 1):
-                    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id);
-                    bot.send_message(call.message.chat.id, '%s%s'%(RESPONSES[0][counter.index(counter_max)],
-                                                                RESPONSES[1]));
-                elif (mini_counter > 1):
-                    buttonA = telebot.types.InlineKeyboardButton(max_srore[0], callback_data="6_"+str(max_srore[0]));
-                    buttonB = telebot.types.InlineKeyboardButton(max_srore[1], callback_data="6_"+str(max_srore[1]));
-                    markup.row(buttonA, buttonB);
-                    bot.edit_message_media(chat_id=call.message.chat.id,message_id=call.message.message_id,
-                                        media=telebot.types.InputMediaPhoto(open('5.JPG', 'rb')),reply_markup=markup);
-                    bot.edit_message_caption(chat_id=call.message.chat.id,message_id=call.message.message_id,
-                                            caption=QUESTIONS_ADD[0]["qs"]+
-                                            '\n%d. '%(max_srore[0])+QUESTIONS_ADD[0]["opt"][max_srore[0]-1]+
-                                            '\n%d. '%(max_srore[1])+QUESTIONS_ADD[0]["opt"][max_srore[1]-1],
-                                            reply_markup=markup);
-            else:
-                form_question(markup,QUESTIONS[qs_index],str(qs_index));
-                if (qs_index == 0):
-                    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id);
-                    bot.send_photo(chat_id=call.message.chat.id,
-                                photo=open('0.JPG', 'rb'),
-                                caption=QUESTIONS[qs_index]["qs"]+
-                                '\n1. '+QUESTIONS[qs_index]["opt"][0]+
-                                '\n2. '+QUESTIONS[qs_index]["opt"][1]+
-                                '\n3. '+QUESTIONS[qs_index]["opt"][2]+
-                                '\n4. '+QUESTIONS[qs_index]["opt"][3],
-                                reply_markup=markup);
-                    return;
-                bot.edit_message_media(chat_id=call.message.chat.id,message_id=call.message.message_id,
-                                    media=telebot.types.InputMediaPhoto(open(str(qs_index)+'.JPG', 'rb')),reply_markup=markup);
-                bot.edit_message_caption(chat_id=call.message.chat.id,message_id=call.message.message_id,
-                                        caption=QUESTIONS[qs_index]["qs"]+
-                                        '\n1. '+QUESTIONS[qs_index]["opt"][0]+
-                                        '\n2. '+QUESTIONS[qs_index]["opt"][1]+
-                                        '\n3. '+QUESTIONS[qs_index]["opt"][2]+
-                                        '\n4. '+QUESTIONS[qs_index]["opt"][3],
-                                        reply_markup=markup);
-        except Exception as ex:
-            print(ex);
-def bot_pooling():
-    while True:
-        bot = telebot.TeleBot(B_TOKN);
-        print("New bot created");
-        bot_actions(bot);
-        print("pooling...");
-        try:
-            bot.polling(none_stop=True, interval=BOT_INTERVAL, timeout=BOT_TIMEOUT);
-        except Exception as ex: #Error in polling
-            print("Bot polling failed, restarting in {}sec. Error:\n{}".format(BOT_TIMEOUT, ex))
-            time.sleep(BOT_TIMEOUT);
-        else: #Clean exit
-            bot.stop_polling();
-            print("Bot polling loop finished");
-            break; #End loop
+
+
+
+
+
+                #if (mini_counter == 1):
+                    #bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id);
+                    #bot.send_message(call.message.chat.id, '%s%s'%(RESPONSES[0][counter.index(counter_max)],
+                                                                #RESPONSES[1]));
+                #elif (mini_counter > 1):
+                    #buttonA = telebot.types.InlineKeyboardButton(max_srore[0], callback_data="6_"+str(max_srore[0]));
+                    #buttonB = telebot.types.InlineKeyboardButton(max_srore[1], callback_data="6_"+str(max_srore[1]));
+                    #markup.row(buttonA, buttonB);
+                    #bot.edit_message_media(chat_id=call.message.chat.id,message_id=call.message.message_id,
+                                        #media=telebot.types.InputMediaPhoto(open('5.JPG', 'rb')),reply_markup=markup);
+                    #bot.edit_message_caption(chat_id=call.message.chat.id,message_id=call.message.message_id,
+                                            #caption=QUESTIONS_ADD[0]["qs"]+
+                                            #'\n%d. '%(max_srore[0])+QUESTIONS_ADD[0]["opt"][max_srore[0]-1]+
+                                            #'\n%d. '%(max_srore[1])+QUESTIONS_ADD[0]["opt"][max_srore[1]-1],
+                                            #reply_markup=markup);
+            #else:
+                #form_question(markup,QUESTIONS[qs_index],str(qs_index));
+                #if (qs_index == 0):
+                    #bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id);
+                    #bot.send_photo(chat_id=call.message.chat.id,
+                                #photo=open('0.JPG', 'rb'),
+                                #caption=QUESTIONS[qs_index]["qs"]+
+                                #'\n1. '+QUESTIONS[qs_index]["opt"][0]+
+                                #'\n2. '+QUESTIONS[qs_index]["opt"][1]+
+                                #'\n3. '+QUESTIONS[qs_index]["opt"][2]+
+                                #'\n4. '+QUESTIONS[qs_index]["opt"][3],
+                                #reply_markup=markup);
+                    #return;
+                #bot.edit_message_media(chat_id=call.message.chat.id,message_id=call.message.message_id,
+                                    #media=telebot.types.InputMediaPhoto(open(str(qs_index)+'.JPG', 'rb')),reply_markup=markup);
+                #bot.edit_message_caption(chat_id=call.message.chat.id,message_id=call.message.message_id,
+                                        #caption=QUESTIONS[qs_index]["qs"]+
+                                        #'\n1. '+QUESTIONS[qs_index]["opt"][0]+
+                                        #'\n2. '+QUESTIONS[qs_index]["opt"][1]+
+                                        #'\n3. '+QUESTIONS[qs_index]["opt"][2]+
+                                        #'\n4. '+QUESTIONS[qs_index]["opt"][3],
+                                        #reply_markup=markup);
+
+class bot_runner(object):
+    BOT_INTERVAL =  1; # long-pooling check packet interval
+    BOT_TIMEOUT  = 10; # long-pooling connection timeout
+    def __init__(self,bot_token):
+        self.bot_token = bot_token;
+    def bot_pooling(self,questions):
+        import time;
+        while True:
+            bot = telebot.TeleBot(self.bot_token);
+            print("[OK] New bot created");
+            telebot_decorators(bot,questions);
+            print("[..] Decorators initialized. pooling started");
+            try:
+                bot.polling(none_stop=True,
+                            interval=bot_runner.BOT_INTERVAL,
+                            timeout=bot_runner.BOT_TIMEOUT);
+            except Exception as ex: #Error in polling
+                print("[FAILED] Restarting in {}sec. Error:\n{}".format(BOT_TIMEOUT, ex))
+                time.sleep(BOT_TIMEOUT);
+            else: # clean, before exit
+                bot.stop_polling();
+                print("[OK] Bot polling loop finished");
+                break; #end loop
+    def bot_hooking(self):
+        pass;
+    def bot_spamming(self):
+        pass;
+
+
+
 if __name__ == "__main__":
-    bot_pooling();
+    import sys;
+    try:
+        mode = sys.argv[1];
+        _bot_runner = bot_runner(BOT_TOKEN);
+        if mode == 'collect':
+            qs_raw = question.generate_questions('bot_constructor');
+            BOT_QUESTIONS = list();
+            for item in qs_raw:
+                BOT_QUESTIONS.append(question(item['qs'],item['input_type']));
+                for opt in item['opts']:
+                    BOT_QUESTIONS[-1].add_option(opt);
+            _bot_runner.bot_pooling(BOT_QUESTIONS); # or _bot_runner.bot_hooking(); for WebHooks
+        elif mode == 'spam':
+            _bot_runner.bot_spamming();
+    except Exception as ex:
+        print(ex);
+    if 'help' in sys.argv[1]:
+        pass;
+    else:
+        print("[FAILED]: wrong options. Please type: %s %s , for more info"%(
+            sys.executable,sys.argv[0]));
+
+
