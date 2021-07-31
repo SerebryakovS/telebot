@@ -2,10 +2,10 @@
 import os
 import uuid
 import telebot
-
-BOT_TOKEN    = ""; # telegram bot token(given by botFather)
-BOT_WELCOME  = ""; # user will see this message first
-BOT_NAME     = ""; # (optional) name for the bot
+# telegram bot token(given by botFather)
+BOT_TOKEN    = "1945088632:AAF5TokYX_nddT-9QBhg2avL-8fVjZeTXMg";
+# (optional) name for the bot
+BOT_NAME     = "@gentemplate_bot";
 
 class question(object):
     opts_limit = 4;
@@ -18,25 +18,25 @@ class question(object):
             'IT':self.form_question_text_field,
             'IC':self.form_question_checksbox
         }[input_type];
-    @static_method
+    @staticmethod
     def generate_questions(filepath):
         questions = list();
         with open(filepath,'r') as qs_file:
             lines = qs_file.readlines();
-            question_index = 0;
             for line in lines:
                 line = line.split(':');
                 if len(line) == 1:
-                    questions[-1]['input_type'] = line[1];
+                    questions[-1]['input_type'] = line[0].strip();
                 else:
-                    if line[0] == 'Q':
+                    if line[0] == 'W':
+                        questions.append({'BOT_WELCOME':line[1]});
+                    elif line[0] == 'Q':
                         questions.append({'qs':line[1],'opts':[],'input_type':''});
-                        question_index+=1;
                     elif line[0] == 'O':
                         questions[-1]['opts'].append(line[1]);
         return questions;
     def add_option(self,option):
-        if len(self.options) < opts_limit:
+        if len(self.options) < question.opts_limit:
             self.options.append(option);
         else:
             print("[question:",self.question_id,"] => options limit reached");
@@ -67,22 +67,23 @@ def telebot_decorators(bot,QUESTIONS):
         # do something with user_id
         user_id = message.from_user.id;
         markup = telebot.types.InlineKeyboardMarkup();
-        bot.send_message(message.chat.id,BOT_WELCOME,reply_markup=markup);
         button_to_begin = telebot.types.InlineKeyboardButton('НАЧАТЬ', callback_data=str('0'));
-        markup.add();
-    @bot.callback_query_handler(func=lambda call: True)
-    def handle(call):
-        try:
-            callback_data = str(call.data).split('_');
-            user_id = call.message.chat.id;
+        markup.add(button_to_begin);
+        bot.send_message(message.chat.id,QUESTIONS[0]['BOT_WELCOME'],reply_markup=markup);
+
+    #@bot.callback_query_handler(func=lambda call: True)
+    #def handle(call):
+        #try:
+            #callback_data = str(call.data).split('_');
+            #user_id = call.message.chat.id;
 
 
-            qs_index = int(callback_data[0]);
-            if int(qs_index) >= 0:
-                USR_STATUS[user_id].update({qs_index:callback_data[1]});
-            qs_index+=1;
+            #qs_index = int(callback_data[0]);
+            #if int(qs_index) >= 0:
+                #USR_STATUS[user_id].update({qs_index:callback_data[1]});
+            #qs_index+=1;
 
-            markup = telebot.types.InlineKeyboardMarkup();
+            #markup = telebot.types.InlineKeyboardMarkup();
 
 
 
@@ -135,26 +136,24 @@ class bot_runner(object):
         import time;
         while True:
             bot = telebot.TeleBot(self.bot_token);
-            print("[OK] New bot created");
+            print("[OK]: New bot created");
             telebot_decorators(bot,questions);
-            print("[..] Decorators initialized. pooling started");
+            print("[..]: Decorators initialized. pooling started");
             try:
                 bot.polling(none_stop=True,
                             interval=bot_runner.BOT_INTERVAL,
                             timeout=bot_runner.BOT_TIMEOUT);
             except Exception as ex: #Error in polling
-                print("[FAILED] Restarting in {}sec. Error:\n{}".format(BOT_TIMEOUT, ex))
+                print("[FAILED]: Restarting in {}sec. Error:\n{}".format(BOT_TIMEOUT, ex))
                 time.sleep(BOT_TIMEOUT);
             else: # clean, before exit
                 bot.stop_polling();
-                print("[OK] Bot polling loop finished");
+                print("[OK]: Bot polling loop finished");
                 break; #end loop
     def bot_hooking(self):
         pass;
     def bot_spamming(self):
         pass;
-
-
 
 if __name__ == "__main__":
     import sys;
@@ -165,6 +164,9 @@ if __name__ == "__main__":
             qs_raw = question.generate_questions('bot_constructor');
             BOT_QUESTIONS = list();
             for item in qs_raw:
+                if 'BOT_WELCOME' in item:
+                    BOT_QUESTIONS.append({'BOT_WELCOME':item['BOT_WELCOME']});
+                    continue;
                 BOT_QUESTIONS.append(question(item['qs'],item['input_type']));
                 for opt in item['opts']:
                     BOT_QUESTIONS[-1].add_option(opt);
@@ -172,7 +174,8 @@ if __name__ == "__main__":
         elif mode == 'spam':
             _bot_runner.bot_spamming();
     except Exception as ex:
-        print(ex);
+        print("[FAILED]:",ex);
+        exit();
     if 'help' in sys.argv[1]:
         pass;
     else:
